@@ -570,6 +570,8 @@ module cva6
   logic vs_sum_csr_ex;
   logic mxr_csr_ex;
   logic vmxr_csr_ex;
+  logic madue_csr_ex;
+  logic hadue_csr_ex;
   logic [CVA6Cfg.PPNW-1:0] satp_ppn_csr_ex;
   logic [CVA6Cfg.ASID_WIDTH-1:0] asid_csr_ex;
   logic [CVA6Cfg.PPNW-1:0] vsatp_ppn_csr_ex;
@@ -650,7 +652,7 @@ module cva6
   icache_drsp_t icache_dreq_cache_if;
 
   amo_req_t amo_req;
-  amo_resp_t amo_resp;
+  amo_resp_t amo_resp, amo_commit;
   logic sb_full;
 
   // ----------------
@@ -1047,6 +1049,7 @@ module cva6
       .amo_valid_commit_i      (amo_valid_commit),
       .amo_req_o               (amo_req),
       .amo_resp_i              (amo_resp),
+      .amo_commit_o            (amo_commit),
       // CoreV-X-Interface
       .x_valid_i               (x_issue_valid_id_ex),
       .x_ready_o               (x_issue_ready_ex_id),
@@ -1086,6 +1089,8 @@ module cva6
       .vs_sum_i                (vs_sum_csr_ex),                  // from CSR
       .mxr_i                   (mxr_csr_ex),                     // from CSR
       .vmxr_i                  (vmxr_csr_ex),                    // from CSR
+      .madue_i                 (madue_csr_ex),                   // from CSR
+      .hadue_i                 (hadue_csr_ex),                   // from CSR
       .satp_ppn_i              (satp_ppn_csr_ex),                // from CSR
       .asid_i                  (asid_csr_ex),                    // from CSR
       .vsatp_ppn_i             (vsatp_ppn_csr_ex),               // from CSR
@@ -1135,7 +1140,7 @@ module cva6
       .wdata_o             (wdata_commit_id),
       .we_gpr_o            (we_gpr_commit_id),
       .we_fpr_o            (we_fpr_commit_id),
-      .amo_resp_i          (amo_resp),
+      .amo_resp_i          (amo_commit),
       .pc_o                (pc_commit),
       .csr_op_o            (csr_op_commit_csr),
       .csr_wdata_o         (csr_wdata_commit_csr),
@@ -1216,6 +1221,8 @@ module cva6
       .vs_sum_o                (vs_sum_csr_ex),
       .mxr_o                   (mxr_csr_ex),
       .vmxr_o                  (vmxr_csr_ex),
+      .menvcfg_adue_o          (madue_csr_ex),
+      .henvcfg_adue_o          (hadue_csr_ex),
       .satp_ppn_o              (satp_ppn_csr_ex),
       .asid_o                  (asid_csr_ex),
       .vsatp_ppn_o             (vsatp_ppn_csr_ex),
