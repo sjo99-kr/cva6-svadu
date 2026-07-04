@@ -118,6 +118,8 @@ module ex_stage
     input logic stall_st_pending_i,
     // TO_BE_COMPLETED - COMMIT_STAGE
     output logic no_st_pending_o,
+    // Shared TLB is busy processing a multi-cycle flush
+    output logic shared_tlb_flush_busy_o,
     // Atomic result is valid - COMMIT_STAGE
     input logic amo_valid_commit_i,
     // FU is ready - ISSUE_STAGE
@@ -562,6 +564,7 @@ module ex_stage
       .flush_i,
       .stall_st_pending_i,
       .no_st_pending_o,
+      .shared_tlb_flush_busy_o,
       .fu_data_i             (lsu_data),
       .lsu_ready_o,
       .lsu_valid_i           (|lsu_valid_i),
@@ -687,11 +690,11 @@ module ex_stage
             current_instruction_is_sfence_vma  <= 1'b0;
             current_instruction_is_hfence_vvma <= 1'b0;
             current_instruction_is_hfence_gvma <= 1'b0;
-          end else if ((fu_data_i[0].operation == SFENCE_VMA && !v_i) && |csr_valid_i) begin
+          end else if ((((fu_data_i[0].operation == SFENCE_VMA) || (fu_data_i[0].operation == SINVAL_VMA)) && !v_i) && |csr_valid_i) begin
             current_instruction_is_sfence_vma <= 1'b1;
-          end else if (((fu_data_i[0].operation == SFENCE_VMA && v_i) || fu_data_i[0].operation == HFENCE_VVMA) && |csr_valid_i) begin
+          end else if (((((fu_data_i[0].operation == SFENCE_VMA) || (fu_data_i[0].operation == SINVAL_VMA)) && v_i) || (fu_data_i[0].operation == HFENCE_VVMA || fu_data_i[0].operation == HINVAL_VVMA)) && |csr_valid_i) begin
             current_instruction_is_hfence_vvma <= 1'b1;
-          end else if ((fu_data_i[0].operation == HFENCE_GVMA) && |csr_valid_i) begin
+          end else if (((fu_data_i[0].operation == HFENCE_GVMA) || (fu_data_i[0].operation == HINVAL_GVMA)) && |csr_valid_i) begin
             current_instruction_is_hfence_gvma <= 1'b1;
           end
         end
@@ -705,7 +708,7 @@ module ex_stage
         end else begin
           if (flush_i) begin
             current_instruction_is_sfence_vma <= 1'b0;
-          end else if (fu_data_i[0].operation == SFENCE_VMA && |csr_valid_i) begin
+          end else if ((fu_data_i[0].operation == SFENCE_VMA || fu_data_i[0].operation == SINVAL_VMA) && |csr_valid_i) begin
             current_instruction_is_sfence_vma <= 1'b1;
           end
         end
@@ -720,7 +723,7 @@ module ex_stage
           vaddr_to_be_flushed  <= '0;
           gpaddr_to_be_flushed <= '0;
           // if the current instruction in EX_STAGE is a sfence.vma, in the next cycle no writes will happen
-        end else if ((~(current_instruction_is_sfence_vma || current_instruction_is_hfence_vvma || current_instruction_is_hfence_gvma)) && (~((fu_data_i[0].operation == SFENCE_VMA || fu_data_i[0].operation == HFENCE_VVMA || fu_data_i[0].operation == HFENCE_GVMA ) && |csr_valid_i))) begin
+        end else if ((~(current_instruction_is_sfence_vma || current_instruction_is_hfence_vvma || current_instruction_is_hfence_gvma)) && (~((fu_data_i[0].operation == SFENCE_VMA || fu_data_i[0].operation == HFENCE_VVMA || fu_data_i[0].operation == HFENCE_GVMA || fu_data_i[0].operation == SINVAL_VMA || fu_data_i[0].operation == HINVAL_VVMA || fu_data_i[0].operation == HINVAL_GVMA) && |csr_valid_i))) begin
           vaddr_to_be_flushed  <= rs1_forwarding;
           gpaddr_to_be_flushed <= {rs1_forwarding[CVA6Cfg.GPLEN-3:0], 2'b00};
           asid_to_be_flushed   <= rs2_forwarding[CVA6Cfg.ASID_WIDTH-1:0];
@@ -736,7 +739,7 @@ module ex_stage
           asid_to_be_flushed  <= '0;
           vaddr_to_be_flushed <= '0;
           // if the current instruction in EX_STAGE is a sfence.vma, in the next cycle no writes will happen
-        end else if ((~current_instruction_is_sfence_vma) && (~((fu_data_i[0].operation == SFENCE_VMA) && |csr_valid_i))) begin
+        end else if ((~current_instruction_is_sfence_vma) && (~((fu_data_i[0].operation == SFENCE_VMA || fu_data_i[0].operation == SINVAL_VMA) && |csr_valid_i))) begin
           vaddr_to_be_flushed <= rs1_forwarding;
           asid_to_be_flushed  <= rs2_forwarding[CVA6Cfg.ASID_WIDTH-1:0];
         end
