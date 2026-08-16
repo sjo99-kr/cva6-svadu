@@ -1,4 +1,5 @@
 # GSoC 2026 Work Product
+<img width="920" height="147" alt="image" src="https://github.com/user-attachments/assets/e1e90f3f-fd3d-4705-9aa1-fe1a2987b710" />
 
 ## RISC-V Privileged ISA Extensions for CVA6
 
@@ -14,12 +15,11 @@ The work includes RTL implementation, directed assembly tests, extension-specifi
 
 - **Upstream pull request:** [openhwgroup/cva6#3384](https://github.com/openhwgroup/cva6/pull/3384)
 - **Code changes:** [Files changed in PR #3384](https://github.com/openhwgroup/cva6/pull/3384/files)
-- **Final GSoC commit:** [`FINAL_GSOC_COMMIT`](FINAL_GSOC_COMMIT_URL)
-- **Final technical report:** [Medium article](MEDIUM_ARTICLE_URL)
+- **Final GSoC code commit:** [`b9817f4`](https://github.com/openhwgroup/cva6/commit/b9817f41cfa8318095e9243a10ba759d173ec907)
+- **Final technical report:** [Medium article](https://medium.com/@airplon/google-summer-of-code-2026-extending-cva6-with-svadu-svpbmt-and-svinval-de60b294c132)
 - **Detailed design and verification notes:** [Google Docs](https://docs.google.com/document/d/1ypJdJz2CnGH1iI8uIijN8Pk9YOaYb5urEnP2yZa9vrY/edit?usp=sharing)
 
-> Replace `FINAL_GSOC_COMMIT`, `FINAL_GSOC_COMMIT_URL`, and `MEDIUM_ARTICLE_URL` before submitting this page for final evaluation. The commit permalink records the exact end of the GSoC work if development continues afterward.
-
+  
 ## Project Goals
 
 The original goal was to add robust Svadu support to CVA6. The project scope was later extended to Svpbmt and Svinval because all three extensions interact with the MMU, TLBs, privileged control state, and memory-access paths.
