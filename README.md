@@ -1,6 +1,13 @@
 # GSoC 2026 Work Product
-<img width="920" height="147" alt="image" src="https://github.com/user-attachments/assets/e1e90f3f-fd3d-4705-9aa1-fe1a2987b710" />
-
+<p align="center">
+  <img height="165"
+       alt="GSoC 2026 logo"
+       src="https://github.com/user-attachments/assets/9a1d7f25-de6e-4750-81cc-9556a4ea746a" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img height="165"
+       alt="CVA6 logo"
+       src="https://github.com/user-attachments/assets/61189ba7-4479-4e68-bc12-b19538331a2e" />
+</p>
 ## RISC-V Privileged ISA Extensions for CVA6
 
 This page summarizes my work for Google Summer of Code 2026 under the [FOSSi Foundation](https://fossi-foundation.org/). The project implements and verifies three RISC-V privileged virtual-memory extensions in the [OpenHW Group CVA6](https://github.com/openhwgroup/cva6) processor:
