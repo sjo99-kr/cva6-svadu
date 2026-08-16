@@ -1,141 +1,189 @@
-# CVA6 RISC-V CPU [![Build Status](https://github.com/openhwgroup/cva6/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/openhwgroup/cva6/actions/workflows/ci.yml) [![CVA6 dashboard](https://riscv-ci.pages.thales-invia.fr/dashboard/badge_master.svg)](https://riscv-ci.pages.thales-invia.fr/dashboard/dashboard_cva6.html) [![Documentation Status](https://readthedocs.com/projects/openhw-group-cva6-user-manual/badge/?version=latest)](https://docs.openhwgroup.org/projects/cva6-user-manual/?badge=latest) [![GitHub release](https://img.shields.io/github/release/openhwgroup/cva6?include_prereleases=&sort=semver&color=blue)](https://github.com/openhwgroup/cva6/releases/)
+# GSoC 2026 Work Product
 
-CVA6 is a 6-stage, single-issue, in-order CPU which implements the 64-bit RISC-V instruction set. It fully implements I, M, A and C extensions as specified in Volume I: User-Level ISA V 2.3 as well as the draft privilege extension 1.10. It implements three privilege levels M, S, U to fully support a Unix-like operating system. Furthermore, it is compliant to the draft external debug spec 0.13.
+## RISC-V Privileged ISA Extensions for CVA6
 
-It has a configurable size, separate TLBs, a hardware PTW and branch-prediction (branch target buffer and branch history table). The primary design goal was on reducing critical path length.
+This page summarizes my work for Google Summer of Code 2026 under the [FOSSi Foundation](https://fossi-foundation.org/). The project implements and verifies three RISC-V privileged virtual-memory extensions in the [OpenHW Group CVA6](https://github.com/openhwgroup/cva6) processor:
 
-The CVA6 core is part of a vivid ecosystem. In [this document](RESOURCES.md), we gather pointers to this ecosystem (building blocks, designs, partners...).
+- **Svadu** - hardware-managed updates of page-table Accessed and Dirty bits
+- **Svpbmt** - page-based memory types for non-cacheable and I/O mappings
+- **Svinval** - fine-grained address-translation cache invalidation
 
-A performance model of CVA6 is available in the `perf-model/` folder of this repository.
-It can be used to investigate performance-related micro-architecture changes.
+The work includes RTL implementation, directed assembly tests, extension-specific test lists, and regression scripts for RV32/Sv32 and RV64/Sv39 configurations.
 
-<img src="docs/03_cva6_design/_static/ariane_overview.drawio.png"/>
+## Work Product Links
 
+- **Upstream pull request:** [openhwgroup/cva6#3384](https://github.com/openhwgroup/cva6/pull/3384)
+- **Code changes:** [Files changed in PR #3384](https://github.com/openhwgroup/cva6/pull/3384/files)
+- **Final GSoC commit:** [`FINAL_GSOC_COMMIT`](FINAL_GSOC_COMMIT_URL)
+- **Final technical report:** [Medium article](MEDIUM_ARTICLE_URL)
+- **Detailed design and verification notes:** [Google Docs](https://docs.google.com/document/d/1ypJdJz2CnGH1iI8uIijN8Pk9YOaYb5urEnP2yZa9vrY/edit?usp=sharing)
 
-# Quick setup
+> Replace `FINAL_GSOC_COMMIT`, `FINAL_GSOC_COMMIT_URL`, and `MEDIUM_ARTICLE_URL` before submitting this page for final evaluation. The commit permalink records the exact end of the GSoC work if development continues afterward.
 
-The following instructions will allow you to compile and run a Verilator model of the CVA6 APU (which instantiates the CVA6 core) within the CVA6 APU testbench (corev_apu/tb).
+## Project Goals
 
-Throughout all build and simulations scripts executions, you can use the environment variable `NUM_JOBS` to set the number of concurrent jobs launched by `make`:
-- if left undefined, `NUM_JOBS` will default to 1, resulting in a sequential execution
-of `make` jobs;
-- when setting `NUM_JOBS` to an explicit value, it is recommended not to exceed 2/3 of
-the total number of virtual cores available on your system.    
+The original goal was to add robust Svadu support to CVA6. The project scope was later extended to Svpbmt and Svinval because all three extensions interact with the MMU, TLBs, privileged control state, and memory-access paths.
 
-1. Checkout the repository and initialize all submodules.
+The main goals were:
+
+1. Translate the architectural requirements of the three extensions into configurable CVA6 RTL.
+2. Preserve correctness across speculation, instruction commit, page-table walks, TLB state, and cache requests.
+3. Add directed architectural tests for extension-specific behavior and corner cases.
+4. Validate the changes against Spike and existing CVA6 regression suites.
+
+## Completed Work
+
+### 1. Svadu: Hardware-managed A/D-bit Updates
+
+A new [Page-Table Entry Update Engine](core/pte_update_unit.sv), or PUE, was added to perform atomic updates of memory-resident PTEs through the HPDcache AMO interface.
+
+Completed features include:
+
+- Separate queues for speculative A-bit and non-speculative D-bit updates
+- A-bit request generation from the Page Table Walker
+- D-bit request generation from the Data TLB for stores and AMOs
+- Store commit tracking before architecturally visible D-bit updates
+- DTLB and Shared TLB synchronization after D-bit updates
+- Backpressure when an A-bit or D-bit update queue is full
+- Arbitration of the AMO port shared by the PUE and AMO Buffer
+- `menvcfg.ADUE` and `henvcfg.ADUE` control for the relevant translation stages
+
+Relevant code:
+
+- [`core/pte_update_unit.sv`](core/pte_update_unit.sv)
+- [`core/cva6_mmu/cva6_ptw.sv`](core/cva6_mmu/cva6_ptw.sv)
+- [`core/cva6_mmu/cva6_tlb.sv`](core/cva6_mmu/cva6_tlb.sv)
+- [`core/cva6_mmu/cva6_shared_tlb.sv`](core/cva6_mmu/cva6_shared_tlb.sv)
+- [`core/store_unit.sv`](core/store_unit.sv)
+- [`core/store_buffer.sv`](core/store_buffer.sv)
+- [`core/amo_buffer.sv`](core/amo_buffer.sv)
+
+### 2. Svpbmt: Page-based Memory Types
+
+PBMT information is extracted from leaf PTEs and propagated through the MMU to the instruction- and data-cache request paths.
+
+Completed features include:
+
+- `menvcfg.PBMTE` and `henvcfg.PBMTE` configuration support
+- PBMT propagation through the PTW and TLB structures
+- Page faults for reserved leaf-PTE and nonzero non-leaf-PTE PBMT encodings
+- Mapping of `PBMT=01` to non-cacheable, idempotent memory
+- Mapping of `PBMT=10` to non-cacheable, non-idempotent I/O
+- Integration of PBMT-derived I/O mappings into non-idempotent load checks
+- PBMT mapping to instruction- and data-cache request attributes
+
+Relevant code:
+
+- [`core/csr_regfile.sv`](core/csr_regfile.sv)
+- [`core/cva6_mmu/cva6_ptw.sv`](core/cva6_mmu/cva6_ptw.sv)
+- [`core/cva6_mmu/cva6_tlb.sv`](core/cva6_mmu/cva6_tlb.sv)
+- [`core/load_unit.sv`](core/load_unit.sv)
+- [`core/cache_subsystem/cva6_hpdcache_if_adapter.sv`](core/cache_subsystem/cva6_hpdcache_if_adapter.sv)
+- [`core/cache_subsystem/cva6_icache.sv`](core/cache_subsystem/cva6_icache.sv)
+
+### 3. Svinval: Fine-grained Translation Invalidation
+
+CVA6 was extended to decode Svinval-related instructions, route their operands to the MMU, and preserve ordering at the commit stage.
+
+Completed features include:
+
+- Decoding of `SFENCE.W.INVAL`, `SINVAL.VMA`, and `SFENCE.INVAL.IR`
+- Decoding of `HINVAL.VVMA` and `HINVAL.GVMA`
+- Address, ASID, and VMID operand routing
+- Privilege and `mstatus.TVM` checks
+- Commit-stage waiting for prior stores and pending multi-cycle TLB invalidations
+
+Relevant code:
+
+- [`core/decoder.sv`](core/decoder.sv)
+- [`core/commit_stage.sv`](core/commit_stage.sv)
+- [`core/controller.sv`](core/controller.sv)
+- [`core/ex_stage.sv`](core/ex_stage.sv)
+- [`core/cva6_mmu/cva6_mmu.sv`](core/cva6_mmu/cva6_mmu.sv)
+- [`core/cva6_mmu/cva6_shared_tlb.sv`](core/cva6_mmu/cva6_shared_tlb.sv)
+
+## Verification
+
+The implementation was verified with the CVA6 Verilator-based simulation environment and Spike as the architectural reference. Directed tests configure controlled page tables, enter the target privilege mode, execute an access or invalidation sequence, and record the observed PTE or exception result in a signature region.
+
+### Coverage
+
+| Extension | Main verification dimensions |
+|---|---|
+| **Svadu** | Sv32/Sv39, all supported leaf levels, S/U modes, fetch/load/store/AMO, and multiple initial A/D-bit states |
+| **Svpbmt** | PBMT `00/01/10/11`, leaf/non-leaf PTEs, all Sv39 levels, S/U modes, and fetch/load/store/AMO |
+| **Svinval** | M/S/U privilege behavior, `mstatus.TVM`, Sv32/Sv39, and VA/ASID-scoped invalidation cases |
+
+### Directed Tests
+
+- [`verif/tests/custom/Svadu`](verif/tests/custom/Svadu)
+- [`verif/tests/custom/Svpbmt`](verif/tests/custom/Svpbmt)
+- [`verif/tests/custom/Svinval`](verif/tests/custom/Svinval)
+
+### Regression Scripts
+
+- [`dv-riscv-svadu-sv32-tests.sh`](verif/regress/dv-riscv-svadu-sv32-tests.sh)
+- [`dv-riscv-svadu-sv39-tests.sh`](verif/regress/dv-riscv-svadu-sv39-tests.sh)
+- [`dv-riscv-svpbmt-sv39-tests.sh`](verif/regress/dv-riscv-svpbmt-sv39-tests.sh)
+- [`dv-riscv-svinval-sv32-tests.sh`](verif/regress/dv-riscv-svinval-sv32-tests.sh)
+- [`dv-riscv-svinval-sv39-tests.sh`](verif/regress/dv-riscv-svinval-sv39-tests.sh)
+
+### Results
+
+The extension-directed tests and selected existing CVA6 regression suites passed on the tested RV32 and RV64 configurations.
+
+| Configuration family | VM mode | Shared TLB | Cache configuration | Result |
+|---|---|---|---|---|
+| `cv32a6_imac_sv32` | Sv32 | Enabled/disabled | Write-through/write-back | Pass |
+| `cv64a6_imafdc_sv39_hpdcache_wb` | Sv39 | Enabled/disabled | Write-back HPDcache | Pass |
+
+Baseline configurations with the extensions disabled were also tested to check that existing instruction execution, address translation, exception handling, and AMO behavior were not regressed.
+
+## Running the Tests
+
+Follow the original CVA6 setup instructions below to install the required RISC-V toolchain and initialize the repository submodules. Then set `RISCV` and run an extension-specific regression script from the repository root:
+
 ```sh
-git clone https://github.com/openhwgroup/cva6.git
-cd cva6
-git submodule update --init --recursive
-```
-
-2. Install the GCC Toolchain [build prerequisites](util/toolchain-builder/README.md#Prerequisites) then [the toolchain itself](util/toolchain-builder/README.md#Getting-started).
-
-:warning: It is **strongly recommended** to use the toolchain built with the provided scripts.
-
-3. Install `cmake`, version 3.14 or higher.
-
-4. Set the RISCV environment variable.
-```sh
-export RISCV=/path/to/toolchain/installation/directory
-```
-
-5. Install `help2man` and `device-tree-compiler` packages.
-
-For Debian-based Linux distributions, run :
-
-```sh
-sudo apt-get install help2man device-tree-compiler
-```
-
-6. Install the riscv-dv requirements:
-
-```sh
-pip3 install -r verif/sim/dv/requirements.txt
-```
-
-7. Run these commands to install a custom Spike and Verilator (i.e. these versions must be used to simulate the CVA6) and [these](#running-regression-tests-simulations) tests suites.
-```sh
-# DV_SIMULATORS is detailed in the next section
+export RISCV=/path/to/riscv/toolchain
 export DV_SIMULATORS=veri-testharness,spike
-bash verif/regress/smoke-tests.sh
+
+bash verif/regress/dv-riscv-svadu-sv32-tests.sh
+bash verif/regress/dv-riscv-svadu-sv39-tests.sh
+bash verif/regress/dv-riscv-svpbmt-sv39-tests.sh
+bash verif/regress/dv-riscv-svinval-sv32-tests.sh
+bash verif/regress/dv-riscv-svinval-sv39-tests.sh
 ```
 
+## Current Status and Upstream Integration
 
-# Tutorials
+- The RTL implementation, directed tests, test lists, and regression scripts are complete on this branch.
+- The code is **not yet merged upstream**.
+- Upstream integration is tracked in [CVA6 PR #3384](https://github.com/openhwgroup/cva6/pull/3384).
+- The PR remains a draft while related MMU and TLB changes are finalized in the upstream `master` branch.
+- After those changes stabilize, this work will be rebased, duplicate changes will be removed, conflicts will be resolved, and the relevant regression suites will be rerun.
 
-* **[Running Simulations](tutorials/running_sim.md)**
-* **[ASIC Implementation](tutorials/asic.md)**
-* **[FPGA Implementation and running an OS](tutorials/fpga.md)**
-* **[Instruction Tracing](corev_apu/instr_tracing/README.md)**
+## Remaining Work
 
-# Directory Structure
+- Rebase the implementation onto the updated CVA6 `master` branch.
+- Resolve integration conflicts and address upstream review feedback.
+- Rerun the extension-directed and baseline regression suites after rebasing.
+- Clarify or complete cache maintenance for runtime cacheable-to-non-cacheable PBMT transitions involving dirty cache lines.
+- Extend hypervisor-directed coverage for VS-stage and G-stage invalidation corner cases.
 
-The directory structure separates the [CVA6 RISC-V CPU](#cva6-risc-v-cpu) core from the [CORE-V-APU FPGA Emulation Platform](#corev-apu-fpga-emulation).
-Files, directories and submodules under `cva6` are for the core _only_ and should not have any dependencies on the APU.
-Files, directories and submodules under `corev_apu` are for the FPGA Emulation platform.
-The CVA6 core can be compiled stand-alone, and obviously the APU is dependent on the core.
+## Challenges and Lessons Learned
 
-The top-level directories of this repo:
-* **ci**: Scriptware for CI.
-* **common**: Source code used by both the CVA6 Core and the COREV APU. Subdirectories from here are `local` for common files that are hosted in this repo and `submodules` that are hosted in other repos.
-* **core**: Source code for the CVA6 Core only. There should be no sources in this directory used to build anything other than the CVA6 core.
-* **corev_apu**: Source code for the CVA6 APU, exclusive of the CVA6 core. There should be no sources in this directory used to build the CVA6 core.
-* **docs**: Documentation.
-* **pd**: Example and CI scripts to synthesis CVA6.
-* **util**: General utility scriptware.
-* **vendor**: Third-party IP maintained outside the repository.
-* **verif**: Verification environment for the CVA6. The verification files shared with other cores are in the [core-v-verif](https://github.com/openhwgroup/core-v-verif) repository on GitHub. core-v-verif is defined as a cva6 submodule.
+- ISA extensions that modify virtual memory require coordination across the PTW, TLBs, LSU, cache interfaces, CSRs, and commit stage rather than isolated decoder changes.
+- A-bit and D-bit updates require different handling because A-bit updates may be speculative while D-bit updates must follow a committed store or AMO.
+- TLB copies of a PTE must be synchronized with the memory-resident PTE to avoid redundant hardware updates.
+- Page-based I/O types affect both cache routing and speculative-execution safety because non-idempotent loads may have device-visible side effects.
+- Directed tests organized by privilege mode, page-table level, access type, and PTE state made missing architectural cases easier to identify.
 
+## Acknowledgments
 
-## verif Directories
+I would like to thank my mentors, Jonathan Balkind and Nils Wistoff, for their guidance and technical feedback throughout the project, and Jerome for coordinating the program. I also thank the FOSSi Foundation, the OpenHW Group community, and the CVA6 contributors for supporting this work.
 
-- **bsp**:     board support package for test-programs compiled/assembled/linked for the CVA6.
-This BSP is used by both `core` testbench and `uvmt_cva6` UVM verification environment.
-- **regress**: scripts to install tools, test suites, CVA6 code and to execute tests
-- **sim**:     simulation environment (e.g. riscv-dv)
-- **tb**:      testbench module instancing the core
-- **tests**:   source of test cases and test lists
+---
 
+## Original CVA6 Documentation
 
-# Contributing
-
-We highly appreciate community contributions.
-To ease the work of reviewing contributions, please review [CONTRIBUTING](CONTRIBUTING.md).
-
-Contributions to the documentation (`docs/` and `tutorials/` directories) are very welcome as well.
-
-If you find any problems or issues with CVA6 or the documentation, please check out the [issue tracker](https://github.com/openhwgroup/cva6/issues)
-and create a new issue if your problem is not yet tracked. \
-[The CVA6 Kanban Board](https://github.com/orgs/openhwgroup/project/3/view/7) loosely tracks planned improvements.
-
-
-# Publication
-
-If you use CVA6 in your academic work you can cite us:
-
-<details>
-<summary>CVA6 Publication</summary>
-
-```
-@article{zaruba2019cost,
-   author={F. {Zaruba} and L. {Benini}},
-   journal={IEEE Transactions on Very Large Scale Integration (VLSI) Systems},
-   title={The Cost of Application-Class Processing: Energy and Performance Analysis of a Linux-Ready 1.7-GHz 64-Bit RISC-V Core in 22-nm FDSOI Technology},
-   year={2019},
-   volume={27},
-   number={11},
-   pages={2629-2640},
-   doi={10.1109/TVLSI.2019.2926114},
-   ISSN={1557-9999},
-   month={Nov},
-}
-```
-
-</details>
-
-# Acknowledgements
-
-Check out the [acknowledgements](ACKNOWLEDGEMENTS.md).
-
-
+The original CVA6 project overview, setup instructions, directory structure, contributing guide, publication information, and acknowledgments should remain below this GSoC work-product section.
