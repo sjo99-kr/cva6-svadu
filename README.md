@@ -8,6 +8,7 @@
        alt="CVA6 logo"
        src="https://github.com/user-attachments/assets/61189ba7-4479-4e68-bc12-b19538331a2e" />
 </p>
+
 ## RISC-V Privileged ISA Extensions for CVA6
 
 This page summarizes my work for Google Summer of Code 2026 under the [FOSSi Foundation](https://fossi-foundation.org/). The project implements and verifies three RISC-V privileged virtual-memory extensions in the [OpenHW Group CVA6](https://github.com/openhwgroup/cva6) processor:
