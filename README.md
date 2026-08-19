@@ -188,7 +188,7 @@ bash verif/regress/dv-riscv-svinval-sv39-tests.sh
 
 ## Acknowledgments
 
-I would like to thank my mentors, Jonathan Balkind and Nils Wistoff, for their guidance and technical feedback throughout the project, and Jerome for coordinating the program. I also thank the FOSSi Foundation, the OpenHW Group community, and the CVA6 contributors for supporting this work.
+I would like to thank my mentors, Jonathan Balkind and Nils Wistoff, for their guidance and technical feedback throughout the project, and Jerome for coordinating the program. I also thank the FOSSi Foundation, the OpenHW Foundation community, and the CVA6 contributors for supporting this work.
 
 ---
 
